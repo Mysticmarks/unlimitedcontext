@@ -1,0 +1,75 @@
+class EnhancedUnlimitedContextManager:
+    def __init__(self):
+        self.content_queue = []
+        self.current_position = 0
+        self.mode_active = False
+
+    def add_content(self, content):
+        """Add content (text or code) to the queue."""
+        self.content_queue.extend(content)
+
+    def get_next_chunk(self, chunk_size=2):
+        """Retrieve the next chunk of content, ensuring code integrity and logical breaks."""
+        if self.current_position >= len(self.content_queue):
+            return ["End of content reached."]
+        end_position = self.current_position + chunk_size
+        while end_position < len(self.content_queue) and               (self.content_queue[end_position].startswith("`") or self.content_queue[end_position-1].startswith("`")):
+            end_position += 1
+        chunk = self.content_queue[self.current_position:end_position]
+        self.current_position = end_position
+        results = []
+        for item in chunk:
+            if item.startswith("`") and item.endswith("`"):
+                code = item[1:-1]
+                try:
+                    exec_result = eval(code)
+                    results.append(str(exec_result))
+                except Exception as e:
+                    results.append(f"Code Error: {e}")
+            else:
+                results.append(item)
+        return results
+
+    def activate_mode(self):
+        self.mode_active = True
+        self.current_position = 0
+        self.content_queue = []
+
+    def deactivate_mode(self):
+        self.mode_active = False
+
+    def is_active(self):
+        return self.mode_active
+
+
+class EnhancedUnlimitedContextSession:
+    def __init__(self):
+        self.manager = EnhancedUnlimitedContextManager()
+        self.mode_enabled = False
+
+    def process_command(self, command):
+        # Detect and automatically activate the enhanced mode based on a keyword
+        first_line = command.split('\n')[0]
+        if first_line == "LONG CONTENT BEGIN":
+            self.manager.activate_mode()
+            self.mode_enabled = True
+            # Remove the trigger line and process the rest
+            content = '\n'.join(command.split('\n')[1:])
+            self.manager.add_content([content])
+            return ["Enhanced unlimited context mode enabled automatically. Use 'CONTINUE READING...' to retrieve the content."]
+        
+        if not self.mode_enabled:
+            return ["Enhanced unlimited context mode is not active. Use 'LONG CONTENT BEGIN' to activate."]
+        
+        if command == "CONTINUE READING...":
+            return self.manager.get_next_chunk(chunk_size=10)
+        
+        self.manager.add_content([command])
+        return ["Content added to the queue."]
+
+
+# Create a session instance at the start of your chat
+session = EnhancedUnlimitedContextSession()
+
+# Prompt the user for input
+input("Please provide your input:")
